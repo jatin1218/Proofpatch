@@ -1,0 +1,19 @@
+{
+  "name": "proofpatch-integrated",
+  "private": true,
+  "version": "0.3.0",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "setup": "npm install",
+    "check": "npm run typecheck --prefix core/validation && npm run check --prefix extensions/vscode",
+    "test": "npm test -w @proofpatch/safe-patch-engine && npm test -w @proofpatch/workspace && npm test --prefix core/validation && npm test --prefix extensions/vscode && npm run test:dom --prefix extensions/vscode",
+    "build": "npm run build --prefix extensions/vscode",
+    "package": "npm run package --prefix extensions/vscode"
+  },
+  "workspaces": [
+    "core/*",
+    "extensions/vscode"
+  ]
+}

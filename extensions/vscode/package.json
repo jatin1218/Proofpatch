@@ -1,0 +1,181 @@
+{
+  "name": "proofpatch-interface",
+  "displayName": "ProofPatch",
+  "description": "ProofPatch TrueForge agent, VS Code review and Member 5 snapshot validation.",
+  "version": "0.3.0",
+  "publisher": "proofpatch-team",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=22.14.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "ProofPatch sends code to a registered agent integration."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "proofpatch.open",
+        "title": "ProofPatch: Open Chat"
+      },
+      {
+        "command": "proofpatch.inlineEdit",
+        "title": "ProofPatch: Edit Selection",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "proofpatch.stop",
+        "title": "ProofPatch: Stop Current Request",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "proofpatch.apply",
+        "title": "ProofPatch: Apply Accepted Changes"
+      },
+      {
+        "command": "proofpatch.undo",
+        "title": "ProofPatch: Undo Last Apply"
+      },
+      {
+        "command": "proofpatch.demo",
+        "title": "ProofPatch: Start Demo Mode"
+      },
+      {
+        "command": "proofpatch.connectTrueForge",
+        "title": "ProofPatch: Connect TrueForge"
+      },
+      {
+        "command": "proofpatch.startTrueForge",
+        "title": "ProofPatch: Start Local TrueForge"
+      },
+      {
+        "command": "proofpatch.openTrueForge",
+        "title": "ProofPatch: Open TrueForge Settings"
+      },
+      {
+        "command": "proofpatch.setTrueForgeToken",
+        "title": "ProofPatch: Set TrueForge Access Token"
+      },
+      {
+        "command": "proofpatch.registerMcp",
+        "title": "ProofPatch: Register Member 2 MCP Server"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "proofpatch",
+          "title": "ProofPatch",
+          "icon": "media/proofpatch.svg"
+        }
+      ]
+    },
+    "views": {
+      "proofpatch": [
+        {
+          "type": "webview",
+          "id": "proofpatch.chat",
+          "name": "Chat & Review"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "proofpatch.inlineEdit",
+          "when": "editorHasSelection && workspaceTrust",
+          "group": "navigation@10"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "proofpatch.stop",
+          "when": "view == proofpatch.chat",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "proofpatch.inlineEdit",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "editorTextFocus && editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "ProofPatch TrueForge",
+      "properties": {
+        "proofpatch.trueforge.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:8790",
+          "scope": "machine",
+          "description": "Local TrueForge base URL. Localhost only."
+        },
+        "proofpatch.trueforge.model": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Configured provider/model name returned by TrueForge. Connect prompts when empty."
+        },
+        "proofpatch.trueforge.mcpServer": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Registered Member 2 MCP connector name. Empty allows chat-only mode."
+        },
+        "proofpatch.validation.python": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Absolute Python interpreter path for pytest against the staged snapshot. Reconnect after changing."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "package": "npm run check && npm run build && vsce package --no-dependencies --allow-missing-repository",
+    "test:ui": "npm run build && node tests/webview.mjs",
+    "test:dom": "npm run build && node tests/dom.mjs",
+    "trueforge": "npx --yes @truefoundry/trueforge@0.185.1",
+    "test:runtime": "node --import tsx tests/live-smoke.ts"
+  },
+  "dependencies": {
+    "@truefoundry/trueforge-sdk": "0.185.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "yaml": "2.9.1",
+    "zod": "^3.25.76",
+    "@modelcontextprotocol/sdk": "1.26.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^31.0.0",
+    "playwright": "^1.65.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jitu1218/proofpatch.git",
+    "directory": "extensions/vscode"
+  }
+}

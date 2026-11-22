@@ -1,0 +1,18 @@
+{
+  "name": "@proofpatch/safe-patch-engine",
+  "version": "0.1.0",
+  "description": "ProofPatch Safe Patch Engine: proposal staging, per-hunk review, overlay WorkspaceView, conflict detection, atomic apply, durable undo.",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "private": true,
+  "engines": { "node": ">=22.14" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
+    "demo": "npm run build && node dist/examples/flask-task-a-demo.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

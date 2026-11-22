@@ -1,0 +1,10 @@
+export * from './types';
+export * from './engine';
+export * from './overlay';
+export * from './fs';
+export * from './diff';
+export { sha256, EMPTY_FINGERPRINT } from './hash';
+export { EngineError, isSecretPath, isProtectedPath, normalizeRel } from './paths';
+export * from './protocol';
+export * from './ipc-server';
+export * from './ipc-client';

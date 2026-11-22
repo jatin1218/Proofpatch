@@ -1,0 +1,66 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import {tmpdir} from 'node:os';
+import {PatchEngine} from '../../../core/engine/src/engine';
+import {textSearch} from '../../../core/workspace/src/search/text-search';
+import {DEFAULT_CONFIG} from '../../../core/workspace/src/types';
+import {ReviewSession} from '../src/integration/review';
+import {readSnapshot} from '../src/integration/snapshot';
+import {createMember5Validation} from '../src/validation/adapter';
+
+test('partial review drives search, real validation, guarded apply and undo',async t=>{
+ const root=await fs.mkdtemp(path.join(tmpdir(),'proofpatch-integration-'));
+ t.after(()=>fs.rm(root,{force:true,recursive:true}));
+ const disk=path.join(root,'example.txt');
+ const original=Array.from({length:25},(_,i)=>'line '+i+'\n').join('');
+ await fs.writeFile(disk,original);
+ const session=new ReviewSession(new PatchEngine({workspaceRoot:root}));
+ session.turn='turn-1';
+ await session.propose('turn-1','example.txt',original.replace('line 1\n','accepted\n').replace('line 21\n','rejected\n'));
+ let review=session.current();
+ assert.equal(review.files[0].hunks.length,2);
+ const [a,b]=review.files[0].hunks;
+ review=await session.patches.decide(review.id,review.revision,'example.txt',a.id,'accepted');
+ review=await session.patches.decide(review.id,review.revision,'example.txt',b.id,'rejected');
+ const search=await textSearch({query:'accepted'},{...DEFAULT_CONFIG,workspaceRoot:root},session.workspace);
+ assert.ok('matches' in search && search.matches.length===1);
+ assert.equal(await fs.readFile(disk,'utf8'),original);
+ const code="const s=require('fs').readFileSync('example.txt','utf8');process.exit(s.includes('accepted')&&s.includes('line 21')&&!s.includes('rejected')?0:1)";
+ const validation=createMember5Validation({getSnapshot:r=>readSnapshot(session,r),checks:[{command:{kind:'test',executable:process.execPath,args:['-e',code],timeoutMs:5000}}],
+ fingerprintKeyProvider:{getFingerprintKey:()=>new Uint8Array(32).fill(1)},environmentAllowlist:[]},async()=>true);
+ const run=()=>validation.run(review,new AbortController().signal);
+ assert.equal((await run()).state,'FRESH');
+ await fs.writeFile(disk,'external change');
+ assert.equal((await run()).state,'CONFLICT');
+ await assert.rejects(()=>session.patches.apply(review.id,review.revision));
+ assert.equal(await fs.readFile(disk,'utf8'),'external change');
+ await fs.writeFile(disk,original);
+ review=await session.patches.apply(review.id,review.revision);
+ assert.equal(await fs.readFile(disk,'utf8'),original.replace('line 1\n','accepted\n'));
+ await session.patches.undo(review.id,review.revision);
+ assert.equal(await fs.readFile(disk,'utf8'),original);
+ await session.cancel('turn-1');
+ await assert.rejects(()=>session.propose('turn-1','late.txt','late'));
+});
+
+test('accepted creates and deletes share one tree across listing, search and validation',async t=>{
+ const root=await fs.mkdtemp(path.join(tmpdir(),'proofpatch-tree-'));
+ t.after(()=>fs.rm(root,{recursive:true,force:true}));
+ await fs.writeFile(path.join(root,'old.txt'),'marker in old file\n');
+ const engine=new PatchEngine({workspaceRoot:root});
+ const session=new ReviewSession(engine);
+ session.turn='tree';
+ await session.propose('tree','old.txt',null);
+ await session.propose('tree','nested/new.txt','marker in new file\n');
+ await engine.setAllDecisions('accepted');
+ assert.deepEqual(await session.workspace.readDirectory(root),['nested']);
+ const search=await textSearch({query:'marker'},{...DEFAULT_CONFIG,workspaceRoot:root},session.workspace);
+ assert.ok('matches' in search);
+ assert.equal(search.matches.length,1);
+ const snapshot=await readSnapshot(session,session.current());
+ assert.equal(snapshot.complete,true);
+ assert.deepEqual(snapshot.snapshot.files,[{path:'nested/new.txt',content:'marker in new file\n'}]);
+ assert.deepEqual(await fs.readdir(root),['old.txt']);
+});

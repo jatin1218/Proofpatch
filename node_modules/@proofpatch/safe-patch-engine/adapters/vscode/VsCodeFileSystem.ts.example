@@ -1,0 +1,74 @@
+/**
+ * TEMPLATE - not compiled or tested here (this package has no `vscode` dependency).
+ * Copy into the extension (Member 3) as VsCodeFileSystem.ts and fix up imports.
+ *
+ * Why use it: writes go through vscode.workspace.fs, so VS Code's file watchers, git decorations and
+ * open editors see the change like any other edit. Use the default NodeFileSystem if you do not need that.
+ *
+ * Wire-up in extension.ts:
+ *   const engine = new PatchEngine({
+ *     workspaceRoot: folder.uri.fsPath,
+ *     fs: new VsCodeFileSystem(),
+ *     undoDir: context.globalStorageUri.fsPath + '/undo/' + workspaceHash   // NOT inside the workspace
+ *   });
+ *   await engine.recover();                       // roll back any interrupted apply from a previous session
+ *   const server = new PatchEngineServer(engine);
+ *   const { socketPath, agentToken, userToken } = await server.start();
+ *   // pass socketPath + agentToken to the MCP server via env; keep userToken inside the extension
+ *
+ * IMPORTANT before engine.apply(): refuse (or save first) if any affected file has unsaved editor changes:
+ *   vscode.workspace.textDocuments.some(d => d.isDirty && affectedAbsPaths.has(d.uri.fsPath))
+ * The engine compares DISK content; an unsaved buffer is invisible to it.
+ */
+import * as vscode from 'vscode';
+import * as path from 'node:path';
+import { randomBytes } from 'node:crypto';
+import type { DirEntry, FileSystem } from '@proofpatch/safe-patch-engine';
+
+const enc = new TextEncoder();
+const dec = new TextDecoder('utf-8');
+
+export class VsCodeFileSystem implements FileSystem {
+  async kind(abs: string): Promise<'file' | 'dir' | 'symlink' | 'none'> {
+    try {
+      const st = await vscode.workspace.fs.stat(vscode.Uri.file(abs));
+      if (st.type & vscode.FileType.SymbolicLink) return 'symlink';
+      if (st.type & vscode.FileType.Directory) return 'dir';
+      return st.type & vscode.FileType.File ? 'file' : 'none';
+    } catch {
+      return 'none';
+    }
+  }
+
+  async readFile(abs: string): Promise<string> {
+    return dec.decode(await vscode.workspace.fs.readFile(vscode.Uri.file(abs)));
+  }
+
+  /** write-temp-then-rename keeps the per-file atomicity the engine relies on. */
+  async writeFileAtomic(abs: string, content: string): Promise<void> {
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(abs)));
+    const tmp = vscode.Uri.file(`${abs}.pp-tmp-${randomBytes(4).toString('hex')}`);
+    await vscode.workspace.fs.writeFile(tmp, enc.encode(content));
+    await vscode.workspace.fs.rename(tmp, vscode.Uri.file(abs), { overwrite: true });
+  }
+
+  async remove(abs: string): Promise<void> {
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(abs), { useTrash: false });
+    } catch (e) {
+      if ((await this.kind(abs)) !== 'none') throw e; // already gone is fine
+    }
+  }
+
+  async readdir(abs: string): Promise<DirEntry[]> {
+    const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(abs));
+    return entries.map(([name, type]) => ({
+      name,
+      isDir: !!(type & vscode.FileType.Directory) && !(type & vscode.FileType.SymbolicLink),
+      isFile: !!(type & vscode.FileType.File) && !(type & vscode.FileType.SymbolicLink)
+    }));
+  }
+
+  // No realpath(): the engine then skips its symlink-escape check. If you need it on remote workspaces,
+  // implement it with the extension host's node fs when the workspace is local.
+}
